@@ -14,7 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      song_hooksteps: {
+        Row: {
+          created_at: string
+          hookstep_description: string[]
+          hookstep_time_end: string | null
+          hookstep_time_start: string | null
+          id: string
+          movie_name: string | null
+          music_director: string | null
+          release_year: number | null
+          singers: string[] | null
+          song_title: string
+          stick_figure_svg: string | null
+          updated_at: string
+          youtube_timestamp_seconds: number | null
+          youtube_video_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          hookstep_description: string[]
+          hookstep_time_end?: string | null
+          hookstep_time_start?: string | null
+          id?: string
+          movie_name?: string | null
+          music_director?: string | null
+          release_year?: number | null
+          singers?: string[] | null
+          song_title: string
+          stick_figure_svg?: string | null
+          updated_at?: string
+          youtube_timestamp_seconds?: number | null
+          youtube_video_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          hookstep_description?: string[]
+          hookstep_time_end?: string | null
+          hookstep_time_start?: string | null
+          id?: string
+          movie_name?: string | null
+          music_director?: string | null
+          release_year?: number | null
+          singers?: string[] | null
+          song_title?: string
+          stick_figure_svg?: string | null
+          updated_at?: string
+          youtube_timestamp_seconds?: number | null
+          youtube_video_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
