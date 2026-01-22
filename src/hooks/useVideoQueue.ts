@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import type { YouTubeVideo } from './useYouTubeSearch';
 
-const YOUTUBE_API_KEY = 'AIzaSyBIh4FDTNJ-uKOff6CIlxvubqGrJT_Bhb8';
+// const YOUTUBE_API_KEY = 'AIzaSyBIh4FDTNJ-uKOff6CIlxvubqGrJT_Bhb8';
+const YOUTUBE_API_KEY = 'AIzaSyD07yW9SPGcQXmVf6jb61_pJKk3nrjEcnY';
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 
 interface UseVideoQueueReturn {

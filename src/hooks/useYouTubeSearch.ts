@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 
-const YOUTUBE_API_KEY = 'AIzaSyBIh4FDTNJ-uKOff6CIlxvubqGrJT_Bhb8';
+// const YOUTUBE_API_KEY = 'AIzaSyBIh4FDTNJ-uKOff6CIlxvubqGrJT_Bhb8';
+const YOUTUBE_API_KEY = 'AIzaSyD07yW9SPGcQXmVf6jb61_pJKk3nrjEcnY';
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 
 export interface YouTubeVideo {
