@@ -1,50 +1,52 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, VolumeX, ChevronUp, ChevronDown, RefreshCw } from 'lucide-react';
+import { Volume2, VolumeX, ChevronUp, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { YouTubeVideo } from '@/hooks/useYouTubeSearch';
 
 interface VideoFeedProps {
   videos: YouTubeVideo[];
+  currentIndex: number;
+  onNext: () => void;
+  onPrevious: () => void;
   onListenAgain: () => void;
   searchQuery?: string;
+  isLoadingMore?: boolean;
+  isMuted: boolean;
+  onToggleMute: () => void;
 }
 
-export function VideoFeed({ videos, onListenAgain, searchQuery }: VideoFeedProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
+export function VideoFeed({ 
+  videos, 
+  currentIndex,
+  onNext,
+  onPrevious,
+  onListenAgain, 
+  searchQuery,
+  isLoadingMore,
+  isMuted,
+  onToggleMute,
+}: VideoFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
 
   const currentVideo = videos[currentIndex];
 
-  const goToNext = useCallback(() => {
-    if (currentIndex < videos.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    }
-  }, [currentIndex, videos.length]);
-
-  const goToPrevious = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
-    }
-  }, [currentIndex]);
-
   // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown' || e.key === 'j') {
-        goToNext();
+        onNext();
       } else if (e.key === 'ArrowUp' || e.key === 'k') {
-        goToPrevious();
+        onPrevious();
       } else if (e.key === 'm') {
-        setIsMuted(prev => !prev);
+        onToggleMute();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [goToNext, goToPrevious]);
+  }, [onNext, onPrevious, onToggleMute]);
 
   // Handle touch swipe
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -57,9 +59,9 @@ export function VideoFeed({ videos, onListenAgain, searchQuery }: VideoFeedProps
     
     if (Math.abs(diff) > 50) {
       if (diff > 0) {
-        goToNext();
+        onNext();
       } else {
-        goToPrevious();
+        onPrevious();
       }
     }
   };
@@ -68,11 +70,11 @@ export function VideoFeed({ videos, onListenAgain, searchQuery }: VideoFeedProps
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     if (e.deltaY > 50) {
-      goToNext();
+      onNext();
     } else if (e.deltaY < -50) {
-      goToPrevious();
+      onPrevious();
     }
-  }, [goToNext, goToPrevious]);
+  }, [onNext, onPrevious]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -124,11 +126,19 @@ export function VideoFeed({ videos, onListenAgain, searchQuery }: VideoFeedProps
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
         {/* Top bar */}
         <div className="pointer-events-auto flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent p-4">
-          {searchQuery && (
-            <div className="rounded-full bg-white/20 px-3 py-1 backdrop-blur-sm">
-              <p className="text-sm text-white">🎵 "{searchQuery}"</p>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {searchQuery && (
+              <div className="rounded-full bg-white/20 px-3 py-1 backdrop-blur-sm">
+                <p className="text-sm text-white">🎵 "{searchQuery}"</p>
+              </div>
+            )}
+            {isLoadingMore && (
+              <div className="flex items-center gap-2 rounded-full bg-primary/80 px-3 py-1 backdrop-blur-sm">
+                <Loader2 className="h-3 w-3 animate-spin text-white" />
+                <span className="text-xs text-white">Finding more...</span>
+              </div>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -157,7 +167,7 @@ export function VideoFeed({ videos, onListenAgain, searchQuery }: VideoFeedProps
                 variant="ghost"
                 size="icon"
                 className="h-12 w-12 rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={onToggleMute}
               >
                 {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
               </Button>

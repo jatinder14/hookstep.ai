@@ -3,34 +3,48 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ListeningIndicator } from '@/components/ListeningIndicator';
 import { VideoFeed } from '@/components/VideoFeed';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { useYouTubeSearch } from '@/hooks/useYouTubeSearch';
+import { useContinuousListening } from '@/hooks/useContinuousListening';
+import { useVideoQueue } from '@/hooks/useVideoQueue';
 import { Mic, AlertCircle, Music } from 'lucide-react';
 
-type AppState = 'idle' | 'listening' | 'searching' | 'results' | 'error';
+type AppState = 'idle' | 'listening' | 'error';
 
 const Index = () => {
   const [appState, setAppState] = useState<AppState>('idle');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [latestQuery, setLatestQuery] = useState('');
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [isMuted, setIsMuted] = useState(true);
+
+  const {
+    videos,
+    currentIndex,
+    isLoading: isSearching,
+    error: searchError,
+    addVideosFromQuery,
+    goToNext,
+    goToPrevious,
+    clearQueue,
+  } = useVideoQueue();
+
+  const handleNewTranscript = useCallback((text: string) => {
+    if (text.trim()) {
+      setLatestQuery(text.trim());
+      addVideosFromQuery(text.trim());
+    }
+  }, [addVideosFromQuery]);
 
   const { 
     isListening, 
-    transcript, 
-    interimTranscript, 
+    currentTranscript, 
     error: speechError, 
     isSupported,
     startListening, 
     stopListening,
-    resetTranscript,
-  } = useSpeechRecognition({ language: 'en-US' });
-
-  const { 
-    videos, 
-    isLoading: isSearching, 
-    error: searchError, 
-    searchVideos 
-  } = useYouTubeSearch();
+  } = useContinuousListening({ 
+    language: 'en-US',
+    onNewTranscript: handleNewTranscript,
+    intervalMs: 3000,
+  });
 
   // Check microphone permission
   useEffect(() => {
@@ -53,53 +67,20 @@ const Index = () => {
     }
   }, [permissionGranted, isSupported]);
 
-  // Watch for transcript and trigger search after 3 seconds of listening
-  useEffect(() => {
-    if (appState === 'listening') {
-      const timer = setTimeout(() => {
-        const finalText = transcript || interimTranscript;
-        if (finalText.trim()) {
-          stopListening();
-          setSearchQuery(finalText.trim());
-          setAppState('searching');
-          searchVideos(finalText.trim());
-        } else {
-          // No text detected, let user try again
-          stopListening();
-          setAppState('idle');
-        }
-      }, 3500); // 3.5 seconds
-
-      return () => clearTimeout(timer);
-    }
-  }, [appState, transcript, interimTranscript, stopListening, searchVideos]);
-
-  // Handle search completion
-  useEffect(() => {
-    if (appState === 'searching' && !isSearching) {
-      if (videos.length > 0) {
-        setAppState('results');
-      } else if (searchError) {
-        setAppState('error');
-      } else {
-        setAppState('error');
-      }
-    }
-  }, [appState, isSearching, videos, searchError]);
-
   const handleStartListening = useCallback(() => {
-    resetTranscript();
-    setSearchQuery('');
+    clearQueue();
+    setLatestQuery('');
     setAppState('listening');
     startListening();
-  }, [resetTranscript, startListening]);
+  }, [clearQueue, startListening]);
 
   const handleListenAgain = useCallback(() => {
+    stopListening();
     setAppState('idle');
     setTimeout(() => {
       handleStartListening();
     }, 100);
-  }, [handleStartListening]);
+  }, [stopListening, handleStartListening]);
 
   const handleRequestPermission = async () => {
     try {
@@ -110,6 +91,13 @@ const Index = () => {
       setPermissionGranted(false);
     }
   };
+
+  const handleToggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+
+  // Show video feed when we have videos
+  const hasVideos = videos.length > 0;
 
   // Render based on state
   const renderContent = () => {
@@ -151,91 +139,85 @@ const Index = () => {
       );
     }
 
-    switch (appState) {
-      case 'idle':
-        return (
-          <div className="flex flex-col items-center justify-center gap-8 px-4 text-center">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
-              <Music className="h-12 w-12 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Club Dance Finder</h1>
-              <p className="mt-2 text-muted-foreground">
-                Tap to listen to the music and find dance videos
-              </p>
-            </div>
-            <Button onClick={handleStartListening} size="lg" className="gap-2">
-              <Mic className="h-5 w-5" />
-              Start Listening
-            </Button>
-          </div>
-        );
-
-      case 'listening':
-        return (
-          <ListeningIndicator 
-            isListening={isListening} 
-            detectedText={transcript || interimTranscript || undefined}
-          />
-        );
-
-      case 'searching':
-        return (
-          <div className="flex flex-col items-center justify-center gap-6 px-4 text-center">
-            <motion.div
-              className="h-16 w-16 rounded-full border-4 border-primary border-t-transparent"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            />
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">Finding Dance Videos</h2>
-              <p className="mt-2 text-muted-foreground">
-                Searching for "{searchQuery}"
-              </p>
-            </div>
-          </div>
-        );
-
-      case 'results':
-        return (
-          <VideoFeed 
-            videos={videos} 
-            onListenAgain={handleListenAgain}
-            searchQuery={searchQuery}
-          />
-        );
-
-      case 'error':
-        return (
-          <div className="flex flex-col items-center justify-center gap-6 px-4 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
-              <AlertCircle className="h-10 w-10 text-destructive" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                {searchError || speechError || 'No videos found'}
-              </h2>
-              <p className="mt-2 text-muted-foreground">
-                {searchQuery ? `Couldn't find videos for "${searchQuery}"` : 'No lyrics detected. Try again with clearer audio.'}
-              </p>
-            </div>
-            <Button onClick={handleListenAgain} size="lg">
-              <Mic className="mr-2 h-5 w-5" />
-              Try Again
-            </Button>
-          </div>
-        );
-
-      default:
-        return null;
+    // Show video feed if we have videos (listening continues in background)
+    if (hasVideos) {
+      return (
+        <VideoFeed 
+          videos={videos}
+          currentIndex={currentIndex}
+          onNext={goToNext}
+          onPrevious={goToPrevious}
+          onListenAgain={handleListenAgain}
+          searchQuery={latestQuery}
+          isLoadingMore={isSearching}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+        />
+      );
     }
+
+    // Still listening, waiting for first results
+    if (appState === 'listening') {
+      return (
+        <ListeningIndicator 
+          isListening={isListening} 
+          detectedText={currentTranscript || undefined}
+        />
+      );
+    }
+
+    // Idle state
+    if (appState === 'idle') {
+      return (
+        <div className="flex flex-col items-center justify-center gap-8 px-4 text-center">
+          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
+            <Music className="h-12 w-12 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Club Dance Finder</h1>
+            <p className="mt-2 text-muted-foreground">
+              Tap to listen to the music and find dance videos
+            </p>
+          </div>
+          <Button onClick={handleStartListening} size="lg" className="gap-2">
+            <Mic className="h-5 w-5" />
+            Start Listening
+          </Button>
+        </div>
+      );
+    }
+
+    // Error state
+    if (appState === 'error') {
+      return (
+        <div className="flex flex-col items-center justify-center gap-6 px-4 text-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
+            <AlertCircle className="h-10 w-10 text-destructive" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">
+              {searchError || speechError || 'Something went wrong'}
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              No lyrics detected. Try again with clearer audio.
+            </p>
+          </div>
+          <Button onClick={handleListenAgain} size="lg">
+            <Mic className="mr-2 h-5 w-5" />
+            Try Again
+          </Button>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
     <div className="flex h-screen w-full flex-col bg-background">
       <AnimatePresence mode="wait">
         <motion.div
-          key={appState}
+          key={hasVideos ? 'feed' : appState}
           className="flex flex-1 items-center justify-center"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
