@@ -1,73 +1,127 @@
-# Welcome to your Lovable project
+# Song to Bolly Beat
 
-## Project info
+A music recognition app that identifies songs and automatically finds related YouTube videos.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🏗️ Project Structure
 
-## How can I edit this code?
+```
+song-to-bolly-beat/
+├── frontend/          # React + Vite frontend application
+│   ├── src/          # Source code
+│   ├── public/       # Static assets
+│   └── package.json  # Frontend dependencies
+│
+├── backend/          # Supabase Edge Functions
+│   └── supabase/     # Supabase configuration
+│       ├── functions/    # Edge Functions
+│       └── migrations/   # Database migrations
+│
+└── docs/             # Documentation files
+    ├── BACKEND_SETUP.md
+    ├── HOW_TO_GET_CREDENTIALS.md
+    └── TROUBLESHOOTING.md
+```
 
-There are several ways of editing your application.
+## 🚀 Quick Start
 
-**Use Lovable**
+### Frontend Setup
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+cd frontend
+npm install
+cp .env.example .env  # Add your Supabase credentials
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Backend Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+cd backend/supabase
+supabase login
+supabase link --project-ref your-project-ref
+supabase secrets set SHAZAM_API_KEY=your_key
+supabase secrets set YOUTUBE_API_KEY=your_key
 
-**Use GitHub Codespaces**
+# Deploy all functions at once
+cd ..
+npm run deploy
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# OR deploy individually
+cd supabase
+supabase functions deploy shazam-detect
+supabase functions deploy youtube-search
+```
 
-## What technologies are used for this project?
+See [BACKEND_SETUP.md](./BACKEND_SETUP.md) for detailed instructions.
 
-This project is built with:
+## 📚 Documentation
 
+- **[Frontend README](./frontend/README.md)** - Frontend setup and development
+- **[Backend README](./backend/README.md)** - Backend setup and deployment
+- **[Backend Setup Guide](./BACKEND_SETUP.md)** - Complete backend setup instructions
+- **[How to Get Credentials](./HOW_TO_GET_CREDENTIALS.md)** - Where to find all API keys
+- **[Troubleshooting](./TROUBLESHOOTING.md)** - Common issues and solutions
+
+## 🎯 Features
+
+- 🎵 **Music Recognition** - Shazam API integration
+- 🎤 **Speech Recognition** - Continuous audio listening
+- 📹 **YouTube Integration** - Automatic video search and playback
+- 🎨 **Modern UI** - Beautiful, responsive design with animations
+- 🔒 **Secure** - API keys stored on backend, never exposed
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React 18 + TypeScript
 - Vite
-- TypeScript
-- React
-- shadcn-ui
 - Tailwind CSS
+- Framer Motion
+- shadcn/ui
 
-## How can I deploy this project?
+### Backend
+- Supabase Edge Functions
+- Shazam API (via RapidAPI)
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## 📝 Environment Variables
 
-## Can I connect a custom domain to my Lovable project?
+### Frontend (.env in `frontend/` directory)
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
+```
 
-Yes, you can!
+### Backend (Supabase Secrets)
+- `SHAZAM_API_KEY` - Your RapidAPI key
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+See [HOW_TO_GET_CREDENTIALS.md](./HOW_TO_GET_CREDENTIALS.md) for detailed instructions.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🔐 Security
+
+- ✅ API keys stored securely on Supabase backend
+- ✅ No API keys in frontend code
+- ✅ CORS protection
+- ✅ Request validation
+
+## 📖 Development
+
+### Frontend Development
+```bash
+cd frontend
+npm run dev
+```
+
+### Backend Development
+```bash
+cd backend/supabase
+supabase functions deploy shazam-detect
+supabase functions logs shazam-detect
+```
+
+## 🐛 Troubleshooting
+
+See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common issues and solutions.
+
+## 📄 License
+
+[Your License Here]

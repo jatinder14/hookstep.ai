@@ -1,0 +1,15 @@
+{
+  "name": "song-to-bolly-beat-backend",
+  "version": "1.0.0",
+  "description": "Backend Supabase Edge Functions",
+  "scripts": {
+    "deploy": "./supabase/deploy-all.sh",
+    "deploy:all": "./supabase/deploy-all.sh",
+    "deploy:shazam": "cd supabase && supabase functions deploy shazam-detect",
+    "deploy:youtube": "cd supabase && supabase functions deploy youtube-search",
+    "deploy:identify": "cd supabase && supabase functions deploy identify-song",
+    "list": "cd supabase && supabase functions list",
+    "logs:shazam": "cd supabase && supabase functions logs shazam-detect",
+    "logs:youtube": "cd supabase && supabase functions logs youtube-search"
+  }
+}
