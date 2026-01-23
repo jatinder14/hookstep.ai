@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import type { YouTubeVideo } from './useYouTubeSearch';
+import { supabase } from '@/integrations/supabase/client';
 
-// const YOUTUBE_API_KEY = 'AIzaSyBIh4FDTNJ-uKOff6CIlxvubqGrJT_Bhb8';
-const YOUTUBE_API_KEY = 'AIzaSyD07yW9SPGcQXmVf6jb61_pJKk3nrjEcnY';
-const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
+// API keys are now stored securely on the backend (Supabase Edge Function)
+// No API keys in frontend code!
 
 interface UseVideoQueueReturn {
   videos: YouTubeVideo[];
@@ -53,34 +53,24 @@ export function useVideoQueue(): UseVideoQueueReturn {
     setError(null);
 
     try {
-      const searchQuery = `${query} dance`;
-      
-      const params = new URLSearchParams({
-        part: 'snippet',
-        q: searchQuery,
-        type: 'video',
-        videoDuration: 'short',
-        maxResults: '10',
-        order: 'relevance',
-        key: YOUTUBE_API_KEY,
+      // Call backend Supabase Edge Function (API keys are secure on backend)
+      const { data, error: fnError } = await supabase.functions.invoke('youtube-search', {
+        body: {
+          query: query.trim(),
+          maxResults: 10,
+          videoDuration: 'short',
+        },
       });
 
-      const response = await fetch(`${YOUTUBE_API_URL}?${params}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to search YouTube');
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to call YouTube API');
       }
 
-      const data = await response.json();
-      
-      const newVideos: YouTubeVideo[] = data.items.map((item: any) => ({
-        id: item.id.videoId,
-        title: item.snippet.title,
-        channelTitle: item.snippet.channelTitle,
-        thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
-        description: item.snippet.description,
-      }));
+      if (!data?.success) {
+        throw new Error(data?.error || 'YouTube API returned an error');
+      }
+
+      const newVideos: YouTubeVideo[] = data.videos || [];
 
       // If replacing, set new videos and start from first video
       if (replace) {

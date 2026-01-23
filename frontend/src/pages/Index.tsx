@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ListeningIndicator } from '@/components/ListeningIndicator';
 import { YouTubeReel } from '@/components/YouTubeReel';
 import { useContinuousListening } from '@/hooks/useContinuousListening';
+import { useShazamRecognition } from '@/hooks/useShazamRecognition';
 import { useVideoQueue } from '@/hooks/useVideoQueue';
 import { Mic, AlertCircle, Music } from 'lucide-react';
 
@@ -35,6 +36,53 @@ const Index = () => {
       addVideosFromQuery(text.trim(), true); // true = replace old videos
     }
   }, [addVideosFromQuery, latestQuery]);
+
+  // Handle Shazam song identification - use full track data
+  const handleShazamSongIdentified = useCallback((track: { 
+    title: string; 
+    subtitle: string;
+    key?: string;
+    images?: { coverart?: string; background?: string };
+    url?: string;
+  }) => {
+    // Create a better search query using song title and artist
+    // Format: "Song Title Artist" for better YouTube search results
+    const searchQuery = `${track.title} ${track.subtitle}`.trim();
+    
+    // Only search if it's a different song (check by track key if available)
+    const trackKey = track.key || searchQuery;
+    if (searchQuery && trackKey !== latestQuery) {
+      console.log('🎵 Shazam identified:', {
+        title: track.title,
+        artist: track.subtitle,
+        key: track.key,
+        coverArt: track.images?.coverart,
+        url: track.url,
+      });
+      
+      setLatestQuery(trackKey);
+      setIsMuted(false);
+      // Search YouTube with the identified song
+      addVideosFromQuery(searchQuery, true);
+    }
+  }, [addVideosFromQuery, latestQuery]);
+
+  // Shazam music recognition - fires API every 5 seconds (controlled by interval)
+  const {
+    isListening: isShazamListening,
+    isProcessing: isShazamProcessing,
+    error: shazamError,
+    currentTrack,
+    startListening: startShazam,
+    stopListening: stopShazam,
+    setEnabled: setShazamEnabled,
+  } = useShazamRecognition({
+    autoStart: false,
+    captureDuration: 5000, // 5 seconds audio capture
+    intervalMs: 5000, // Fire API every 5 seconds (not continuously)
+    enabled: true, // Interval flag - set to false to disable
+    onSongIdentified: handleShazamSongIdentified,
+  });
 
   const { 
     isListening, 
@@ -89,16 +137,19 @@ const Index = () => {
     clearQueue();
     setLatestQuery('');
     setAppState('listening');
+    // Start both Shazam and speech recognition
+    startShazam();
     startListening();
-  }, [clearQueue, startListening]);
+  }, [clearQueue, startListening, startShazam]);
 
   const handleListenAgain = useCallback(() => {
     stopListening();
+    stopShazam();
     setAppState('idle');
     setTimeout(() => {
       handleStartListening();
     }, 100);
-  }, [stopListening, handleStartListening]);
+  }, [stopListening, stopShazam, handleStartListening]);
 
   const handleRequestPermission = async () => {
     try {
@@ -116,7 +167,8 @@ const Index = () => {
 
   // Show video feed when we have videos
   const hasVideos = videos.length > 0;
-  const showListeningIndicator = appState === 'listening' || (hasVideos && isListening);
+  const showListeningIndicator = appState === 'listening' || (hasVideos && (isListening || isShazamListening));
+  const isProcessing = isShazamProcessing || isSearching;
 
   // Render based on state
   const renderContent = () => {
@@ -225,24 +277,42 @@ const Index = () => {
                         </div>
                       )}
                     </div>
-                    {currentTranscript && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="text-xs font-medium text-primary/80 truncate max-w-md"
-                      >
-                        Detected: "{currentTranscript}"
-                      </motion.span>
+                {currentTrack && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2"
+                  >
+                    {currentTrack.images?.coverart && (
+                      <img 
+                        src={currentTrack.images.coverart} 
+                        alt={currentTrack.title}
+                        className="h-6 w-6 rounded object-cover"
+                      />
                     )}
-                    {isSearching && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Searching for dance videos...
-                      </motion.span>
-                    )}
+                    <span className="text-xs font-medium text-primary/90 truncate max-w-md">
+                      🎵 <span className="font-semibold">{currentTrack.title}</span> by {currentTrack.subtitle}
+                    </span>
+                  </motion.div>
+                )}
+                {currentTranscript && !currentTrack && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-xs font-medium text-primary/80 truncate max-w-md"
+                  >
+                    Detected: "{currentTranscript}"
+                  </motion.span>
+                )}
+                {isProcessing && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {isShazamProcessing ? 'Identifying song...' : 'Searching for dance videos...'}
+                  </motion.span>
+                )}
                   </div>
                 </div>
 
