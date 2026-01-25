@@ -96,3 +96,152 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Neon glow effects */
+  .neon-glow-cyan {
+    box-shadow: 
+      0 0 5px hsl(180 100% 50%),
+      0 0 20px hsl(180 100% 50% / 0.5),
+      0 0 40px hsl(180 100% 50% / 0.3);
+  }
+
+  .neon-glow-magenta {
+    box-shadow: 
+      0 0 5px hsl(300 100% 60%),
+      0 0 20px hsl(300 100% 60% / 0.5),
+      0 0 40px hsl(300 100% 60% / 0.3);
+  }
+
+  .neon-glow-purple {
+    box-shadow: 
+      0 0 5px hsl(270 100% 65%),
+      0 0 20px hsl(270 100% 65% / 0.5),
+      0 0 40px hsl(270 100% 65% / 0.3);
+  }
+
+  .neon-text-glow {
+    text-shadow: 
+      0 0 10px currentColor,
+      0 0 20px currentColor,
+      0 0 40px currentColor;
+  }
+
+  /* Aurora gradient animation */
+  @keyframes aurora-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+      filter: hue-rotate(0deg);
+    }
+    25% {
+      background-position: 50% 100%;
+      filter: hue-rotate(30deg);
+    }
+    50% {
+      background-position: 100% 50%;
+      filter: hue-rotate(60deg);
+    }
+    75% {
+      background-position: 50% 0%;
+      filter: hue-rotate(30deg);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes like-burst {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.3);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes ring-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+  @keyframes color-breathe {
+    0%, 100% {
+      --current-hue: 180;
+    }
+    20% {
+      --current-hue: 270;
+    }
+    40% {
+      --current-hue: 300;
+    }
+    60% {
+      --current-hue: 330;
+    }
+    80% {
+      --current-hue: 210;
+    }
+  }
+
+  .aurora-bg {
+    background: linear-gradient(
+      135deg,
+      hsl(180 100% 50% / 0.15),
+      hsl(270 100% 65% / 0.15),
+      hsl(300 100% 60% / 0.15),
+      hsl(330 100% 65% / 0.15)
+    );
+    background-size: 400% 400%;
+    animation: aurora-shift 8s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  .animate-like-burst {
+    animation: like-burst 0.4s ease-out;
+  }
+
+  .animate-ring-pulse {
+    animation: ring-pulse 0.6s ease-out forwards;
+  }
+}
+
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

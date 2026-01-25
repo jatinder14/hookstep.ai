@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ListeningIndicator } from '@/components/ListeningIndicator';
-import { YouTubeReel } from '@/components/YouTubeReel';
+import NeonReels from '@/components/NeonReels';
 import { useContinuousListening } from '@/hooks/useContinuousListening';
 import { useShazamRecognition } from '@/hooks/useShazamRecognition';
 import { useVideoQueue } from '@/hooks/useVideoQueue';
@@ -219,8 +219,11 @@ const Index = () => {
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="shrink-0 border-b border-primary/20 bg-gradient-to-r from-background via-background/98 to-background backdrop-blur-xl shadow-lg"
+              className="shrink-0 bg-gradient-to-r from-background via-background/98 to-background backdrop-blur-xl shadow-lg relative z-30"
             >
+              {/* Gradient separator at bottom */}
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/20 to-transparent blur-sm" />
               <div className="flex items-center justify-between gap-4 px-6 py-4">
                 <div className="flex items-center gap-4">
                   {/* Animated Microphone Icon */}
@@ -335,18 +338,17 @@ const Index = () => {
             </motion.div>
           )}
 
-          {/* Videos below */}
-          <div className="flex-1 min-h-0">
-            <YouTubeReel 
-              videos={videos}
-              currentIndex={currentIndex}
-              onNext={goToNext}
-              onPrevious={goToPrevious}
-              isMuted={isMuted}
-              onToggleMute={handleToggleMute}
-              autoPlay={true}
-            />
-          </div>
+          {/* Videos below - NeonReels handles full screen */}
+          <NeonReels 
+            videos={videos}
+            currentIndex={currentIndex}
+            onNext={goToNext}
+            onPrevious={goToPrevious}
+            isMuted={isMuted}
+            onToggleMute={handleToggleMute}
+            autoPlay={true}
+            navbarHeight={showListeningIndicator ? 80 : 0}
+          />
         </div>
       );
     }
