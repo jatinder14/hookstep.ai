@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import NeonReelCard from "./NeonReelCard";
-import type { YouTubeVideo } from "@/hooks/useYouTubeSearch";
+import type { YouTubeVideo } from "@/types/youtube";
 
 interface NeonReelsProps {
   videos: YouTubeVideo[];

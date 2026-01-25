@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { YouTubeVideo } from './useYouTubeSearch';
+import type { YouTubeVideo } from '@/types/youtube';
 import { supabase } from '@/integrations/supabase/client';
 
 // API keys are now stored securely on the backend (Supabase Edge Function)

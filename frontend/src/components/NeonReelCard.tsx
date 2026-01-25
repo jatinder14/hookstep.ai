@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Play, Pause } from "lucide-react";
 import NeonLikeButton from "./NeonLikeButton";
 import NeonVolumeButton from "./NeonVolumeButton";
-import type { YouTubeVideo } from "@/hooks/useYouTubeSearch";
+import type { YouTubeVideo } from "@/types/youtube";
 
 interface NeonReelCardProps {
   video: YouTubeVideo;
