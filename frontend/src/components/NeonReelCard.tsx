@@ -16,6 +16,8 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
   const [hue, setHue] = useState(180);
   const [audioLevel, setAudioLevel] = useState(0.5);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [userInteracted, setUserInteracted] = useState(false);
   const animationRef = useRef<number>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const videoUrlRef = useRef<string>('');
@@ -62,58 +64,314 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
     };
   }, [isActive]);
 
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                            (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+      setIsMobile(isMobileDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Track user interaction for mobile autoplay unlock
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      setUserInteracted(true);
+      // Remove listeners after first interaction
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('click', handleUserInteraction);
+    };
+    
+    if (!userInteracted) {
+      document.addEventListener('touchstart', handleUserInteraction, { once: true });
+      document.addEventListener('click', handleUserInteraction, { once: true });
+    }
+    
+    return () => {
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('click', handleUserInteraction);
+    };
+  }, [userInteracted]);
+
   // Build YouTube embed URL - only update when video.id changes
   useEffect(() => {
     if (currentVideoIdRef.current !== video.id) {
       currentVideoIdRef.current = video.id;
-      // Store the URL with autoplay enabled - we'll control play/pause via postMessage
-      videoUrlRef.current = `https://www.youtube.com/embed/${video.id}?autoplay=${autoPlay ? 1 : 0}&mute=${isMuted ? 1 : 0}&loop=1&playlist=${video.id}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&start=0`;
-    }
-  }, [video.id, autoPlay]); // Note: isMuted and isActive not in deps
-
-  // Auto-play video when it becomes active after scrolling
-  useEffect(() => {
-    if (isActive && iframeRef.current && autoPlay) {
-      // Delay to ensure iframe is ready
-      const timeoutId = setTimeout(() => {
-        try {
-          // Play the video when it becomes active
-          iframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({
-              event: 'command',
-              func: 'playVideo',
-              args: [],
-            }),
-            'https://www.youtube.com'
-          );
-          setIsPlaying(true);
-        } catch (error) {
-          console.warn('Failed to play video via postMessage:', error);
-        }
-      }, 200);
+      // On mobile, start muted to allow autoplay (mobile browsers block autoplay with sound)
+      // The user can unmute after interaction
+      const shouldMuteForMobile = isMobile && !userInteracted;
+      const effectiveMute = shouldMuteForMobile ? 1 : (isMuted ? 1 : 0);
       
-      return () => clearTimeout(timeoutId);
-    } else if (!isActive && iframeRef.current) {
+      // Store the URL with autoplay enabled - we'll control play/pause via postMessage
+      videoUrlRef.current = `https://www.youtube.com/embed/${video.id}?autoplay=${autoPlay ? 1 : 0}&mute=${effectiveMute}&loop=1&playlist=${video.id}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&start=0`;
+    }
+  }, [video.id, autoPlay, isMobile, userInteracted]); // Note: isMuted and isActive not in deps
+
+  // Auto-play video when it becomes active - ALWAYS ensure it plays
+  useEffect(() => {
+    if (!isActive || !autoPlay) {
       // Pause video when it becomes inactive
-      const timeoutId = setTimeout(() => {
-        try {
-          iframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({
-              event: 'command',
-              func: 'pauseVideo',
-              args: [],
-            }),
-            'https://www.youtube.com'
-          );
-          setIsPlaying(false);
-        } catch (error) {
-          console.warn('Failed to pause video via postMessage:', error);
+      if (!isActive && iframeRef.current) {
+        const timeoutId = setTimeout(() => {
+          try {
+            iframeRef.current?.contentWindow?.postMessage(
+              JSON.stringify({
+                event: 'command',
+                func: 'pauseVideo',
+                args: [],
+              }),
+              'https://www.youtube.com'
+            );
+            setIsPlaying(false);
+          } catch (error) {
+            console.warn('Failed to pause video via postMessage:', error);
+          }
+        }, 100);
+        return () => clearTimeout(timeoutId);
+      }
+      return;
+    }
+
+    // When video becomes active, ensure it plays
+    if (!iframeRef.current) {
+      // Iframe not ready yet, wait a bit and retry
+      const checkInterval = setInterval(() => {
+        if (iframeRef.current && isActive) {
+          clearInterval(checkInterval);
+          // Trigger play attempt
+          const attemptPlay = () => {
+            try {
+              // On mobile, ensure video is muted initially for autoplay to work
+              if (isMobile && !userInteracted) {
+                iframeRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({
+                    event: 'command',
+                    func: 'mute',
+                    args: [],
+                  }),
+                  'https://www.youtube.com'
+                );
+              }
+              
+              // Play the video
+              iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({
+                  event: 'command',
+                  func: 'playVideo',
+                  args: [],
+                }),
+                'https://www.youtube.com'
+              );
+              setIsPlaying(true);
+            } catch (error) {
+              console.warn('Failed to play video:', error);
+            }
+          };
+          setTimeout(attemptPlay, 300);
         }
       }, 100);
       
-      return () => clearTimeout(timeoutId);
+      return () => clearInterval(checkInterval);
     }
-  }, [isActive, autoPlay]);
+
+    // Iframe is ready, play immediately
+    let retryCount = 0;
+    const maxRetries = isMobile ? 15 : 10; // More retries to ensure it plays
+    
+    const attemptPlay = () => {
+      if (!isActive || !iframeRef.current) return;
+      
+      try {
+        // On mobile, ensure video is muted initially for autoplay to work
+        if (isMobile && !userInteracted) {
+          iframeRef.current.contentWindow?.postMessage(
+            JSON.stringify({
+              event: 'command',
+              func: 'mute',
+              args: [],
+            }),
+            'https://www.youtube.com'
+          );
+        }
+        
+        // Play the video when it becomes active
+        iframeRef.current.contentWindow?.postMessage(
+          JSON.stringify({
+            event: 'command',
+            func: 'playVideo',
+            args: [],
+          }),
+          'https://www.youtube.com'
+        );
+        setIsPlaying(true);
+      } catch (error) {
+        console.warn('Failed to play video via postMessage:', error);
+        // Retry if failed and haven't exceeded max retries
+        if (retryCount < maxRetries && isActive) {
+          retryCount++;
+          const delay = isMobile ? 400 * retryCount : 250 * retryCount;
+          setTimeout(attemptPlay, delay);
+        }
+      }
+    };
+    
+    // Start playing immediately, then retry if needed
+    attemptPlay();
+    
+    // Also set up a delayed attempt to ensure it plays
+    const initialDelay = isMobile ? 800 : 400;
+    const timeoutId = setTimeout(attemptPlay, initialDelay);
+    
+    // Keep trying periodically to ensure video is playing
+    const keepAliveInterval = setInterval(() => {
+      if (isActive && !isPlaying && iframeRef.current) {
+        attemptPlay();
+      }
+    }, 2000); // Check every 2 seconds
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(keepAliveInterval);
+    };
+  }, [isActive, autoPlay, video.id, isMobile, userInteracted, isPlaying]);
+
+  // Listen for YouTube iframe API events and ensure continuous playback
+  useEffect(() => {
+    if (!isActive || !autoPlay) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      // Only process messages from YouTube
+      if (event.origin !== 'https://www.youtube.com') return;
+
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        
+        // Handle YouTube iframe API events
+        if (data.event === 'onStateChange') {
+          // YouTube player state: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+          if (data.info === 1) {
+            // Video is playing
+            setIsPlaying(true);
+          } else if (data.info === 2 || data.info === -1) {
+            // Video is paused or unstarted - ALWAYS restart if it should be playing
+            if (isActive && autoPlay) {
+              const delay = isMobile ? 200 : 100;
+              setTimeout(() => {
+                if (!isActive || !iframeRef.current) return;
+                try {
+                  // On mobile, ensure muted if no user interaction yet
+                  if (isMobile && !userInteracted) {
+                    iframeRef.current.contentWindow?.postMessage(
+                      JSON.stringify({
+                        event: 'command',
+                        func: 'mute',
+                        args: [],
+                      }),
+                      'https://www.youtube.com'
+                    );
+                  }
+                  
+                  iframeRef.current.contentWindow?.postMessage(
+                    JSON.stringify({
+                      event: 'command',
+                      func: 'playVideo',
+                      args: [],
+                    }),
+                    'https://www.youtube.com'
+                  );
+                  setIsPlaying(true);
+                } catch (error) {
+                  console.warn('Failed to resume video playback:', error);
+                }
+              }, delay);
+            } else {
+              setIsPlaying(false);
+            }
+          } else if (data.info === 0) {
+            // Video ended - restart immediately for looping
+            if (isActive && autoPlay) {
+              const delay = isMobile ? 200 : 100;
+              setTimeout(() => {
+                if (!isActive || !iframeRef.current) return;
+                try {
+                  // On mobile, ensure muted if no user interaction yet
+                  if (isMobile && !userInteracted) {
+                    iframeRef.current.contentWindow?.postMessage(
+                      JSON.stringify({
+                        event: 'command',
+                        func: 'mute',
+                        args: [],
+                      }),
+                      'https://www.youtube.com'
+                    );
+                  }
+                  
+                  iframeRef.current.contentWindow?.postMessage(
+                    JSON.stringify({
+                      event: 'command',
+                      func: 'playVideo',
+                      args: [],
+                    }),
+                    'https://www.youtube.com'
+                  );
+                  setIsPlaying(true);
+                } catch (error) {
+                  console.warn('Failed to restart video after end:', error);
+                }
+              }, delay);
+            }
+          } else if (data.info === 3) {
+            // Buffering - video is loading, keep isPlaying as true
+            setIsPlaying(true);
+          }
+        } else if (data.event === 'onReady') {
+          // Iframe API is ready - ALWAYS ensure video plays
+          if (isActive && autoPlay) {
+            const delay = isMobile ? 600 : 300;
+            setTimeout(() => {
+              if (!isActive || !iframeRef.current) return;
+              try {
+                // On mobile, ensure muted for autoplay
+                if (isMobile && !userInteracted) {
+                  iframeRef.current.contentWindow?.postMessage(
+                    JSON.stringify({
+                      event: 'command',
+                      func: 'mute',
+                      args: [],
+                    }),
+                    'https://www.youtube.com'
+                  );
+                }
+                
+                iframeRef.current.contentWindow?.postMessage(
+                  JSON.stringify({
+                    event: 'command',
+                    func: 'playVideo',
+                    args: [],
+                  }),
+                  'https://www.youtube.com'
+                );
+                setIsPlaying(true);
+              } catch (error) {
+                console.warn('Failed to play video on ready:', error);
+              }
+            }, delay);
+          }
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [isActive, autoPlay, isMobile, userInteracted]);
 
   // Handle click to toggle play/pause
   const handleVideoClick = (e: React.MouseEvent | React.TouchEvent) => {
@@ -154,10 +412,14 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
       // Small delay to ensure iframe is ready
       const timeoutId = setTimeout(() => {
         try {
+          // On mobile, if user hasn't interacted yet, keep muted for autoplay
+          // After interaction, respect the isMuted prop
+          const shouldMute = isMobile && !userInteracted ? true : isMuted;
+          
           iframeRef.current?.contentWindow?.postMessage(
             JSON.stringify({
               event: 'command',
-              func: isMuted ? 'mute' : 'unMute',
+              func: shouldMute ? 'mute' : 'unMute',
               args: [],
             }),
             'https://www.youtube.com'
@@ -169,7 +431,8 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
       
       return () => clearTimeout(timeoutId);
     }
-  }, [isMuted, isActive]);
+  }, [isMuted, isActive, isMobile, userInteracted]);
+
 
   const glowColor = `hsl(${hue}, 100%, 60%)`;
   const glowColorSoft = `hsl(${hue}, 80%, 50%)`;
@@ -222,9 +485,50 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
             className="absolute inset-0 w-full h-full z-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
+            playsInline
             style={{
               border: 'none',
               pointerEvents: 'none', // Disable iframe pointer events so overlay can capture clicks
+            }}
+            onLoad={() => {
+              // When iframe loads, ALWAYS ensure video plays if it should be active
+              if (isActive && autoPlay && iframeRef.current) {
+                // Try multiple times to ensure it plays
+                const playAttempts = [300, 600, 1000, 1500]; // Multiple attempts with increasing delays
+                
+                playAttempts.forEach((delay, index) => {
+                  setTimeout(() => {
+                    if (!isActive || !iframeRef.current) return;
+                    try {
+                      // On mobile, ensure muted for autoplay
+                      if (isMobile && !userInteracted) {
+                        iframeRef.current.contentWindow?.postMessage(
+                          JSON.stringify({
+                            event: 'command',
+                            func: 'mute',
+                            args: [],
+                          }),
+                          'https://www.youtube.com'
+                        );
+                      }
+                      
+                      iframeRef.current.contentWindow?.postMessage(
+                        JSON.stringify({
+                          event: 'command',
+                          func: 'playVideo',
+                          args: [],
+                        }),
+                        'https://www.youtube.com'
+                      );
+                      setIsPlaying(true);
+                    } catch (error) {
+                      if (index === playAttempts.length - 1) {
+                        console.warn('Failed to play video on iframe load after all attempts:', error);
+                      }
+                    }
+                  }, delay);
+                });
+              }
             }}
           />
         )}

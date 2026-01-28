@@ -57,8 +57,8 @@ serve(async (req) => {
       );
     }
 
-    // Add "dance" keyword to search query for better results
-    const searchQuery = `${query.trim()} dance`;
+    // Add "dance" and "shorts" keywords to search query for better results (YouTube Shorts only)
+    const searchQuery = `${query.trim()} dance shorts`;
     
     // Build YouTube API request
     const params = new URLSearchParams({
@@ -87,14 +87,84 @@ serve(async (req) => {
     const data = await response.json();
     console.log('📹 YouTube: Found', data.items?.length || 0, 'videos');
 
-    // Format videos for frontend
-    const videos = (data.items || []).map((item: any) => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      channelTitle: item.snippet.channelTitle,
-      thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
-      description: item.snippet.description,
-    }));
+    // Helper function to parse YouTube duration (PT1M30S format) to seconds
+    function parseDuration(duration: string): number {
+      const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      if (!match) return 0;
+      const hours = parseInt(match[1] || '0', 10);
+      const minutes = parseInt(match[2] || '0', 10);
+      const seconds = parseInt(match[3] || '0', 10);
+      return hours * 3600 + minutes * 60 + seconds;
+    }
+
+    // Extract video IDs to check embeddability and verify they're Shorts
+    const videoIds = (data.items || []).map((item: any) => item.id.videoId);
+    
+    // Check embeddability status and video details (to verify Shorts format) for all videos
+    let embeddableVideos: string[] = [];
+    if (videoIds.length > 0) {
+      try {
+        // Get both status and contentDetails to check embeddability and verify Shorts (vertical 9:16 format)
+        const detailsParams = new URLSearchParams({
+          part: 'status,contentDetails',
+          id: videoIds.join(','),
+          key: youtubeApiKey,
+        });
+        
+        const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?${detailsParams}`;
+        const detailsResponse = await fetch(detailsUrl);
+        
+        if (detailsResponse.ok) {
+          const detailsData = await detailsResponse.json();
+          // Filter to only embeddable Shorts that are public and available
+          embeddableVideos = (detailsData.items || [])
+            .filter((item: any) => {
+              const status = item.status;
+              const contentDetails = item.contentDetails;
+              
+              // Check if video is embeddable, public, and processed
+              const isEmbeddable = status?.embeddable !== false && 
+                                   status?.privacyStatus === 'public' &&
+                                   status?.uploadStatus === 'processed';
+              
+              if (!isEmbeddable) return false;
+              
+              // Verify it's a Short (vertical format 9:16)
+              // Shorts are typically under 60 seconds and have vertical aspect ratio
+              const duration = contentDetails?.duration;
+              const dimension = contentDetails?.dimension;
+              
+              // Check if it's vertical (dimension === 'vertical') or has Shorts-like duration
+              // YouTube Shorts are typically vertical and under 60 seconds
+              const isVertical = dimension === 'vertical';
+              const isShortDuration = duration && parseDuration(duration) <= 60; // 60 seconds max for Shorts
+              
+              // Include if it's vertical OR if duration suggests it's a Short
+              // (Some Shorts might not have dimension set, so we check duration too)
+              return isVertical || isShortDuration;
+            })
+            .map((item: any) => item.id);
+          console.log('📹 YouTube: Found', embeddableVideos.length, 'embeddable Shorts out of', videoIds.length);
+        } else {
+          console.warn('📹 YouTube: Failed to check video details, including all videos');
+          embeddableVideos = videoIds; // Fallback: include all if check fails
+        }
+      } catch (detailsError) {
+        console.warn('📹 YouTube: Error checking video details:', detailsError);
+        embeddableVideos = videoIds; // Fallback: include all if check fails
+      }
+    }
+
+    // Format videos for frontend, filtering out non-embeddable videos
+    const videos = (data.items || [])
+      .filter((item: any) => embeddableVideos.includes(item.id.videoId))
+      .map((item: any) => ({
+        id: item.id.videoId,
+        title: item.snippet.title,
+        channelTitle: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
+        description: item.snippet.description,
+      }));
 
     return new Response(
       JSON.stringify({ 

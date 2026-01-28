@@ -10,7 +10,7 @@ interface UseVideoQueueReturn {
   currentIndex: number;
   isLoading: boolean;
   error: string | null;
-  addVideosFromQuery: (query: string, replace?: boolean) => Promise<void>;
+  addVideosFromQuery: (query: string, replace?: boolean, autoScroll?: boolean) => Promise<void>;
   goToNext: () => void;
   goToPrevious: () => void;
   clearQueue: () => void;
@@ -23,18 +23,25 @@ export function useVideoQueue(): UseVideoQueueReturn {
   const [error, setError] = useState<string | null>(null);
   const searchedQueriesRef = useRef<Set<string>>(new Set());
   const currentQueryRef = useRef<string>('');
+  const currentVideoIdRef = useRef<string | null>(null); // Track currently playing video ID
+  const currentIndexRef = useRef<number>(0); // Track current index for reliable access
 
-  const addVideosFromQuery = useCallback(async (query: string, replace: boolean = false) => {
+  const addVideosFromQuery = useCallback(async (query: string, replace: boolean = false, autoScroll: boolean = false) => {
     if (!query.trim()) return;
     
     const normalizedQuery = query.trim().toLowerCase();
     
-    // If replacing, clear old videos and reset
+    // If replacing, keep current video and remove future videos
     if (replace) {
       // Check if this is a different query than the current one
       if (normalizedQuery !== currentQueryRef.current.toLowerCase()) {
-        setVideos([]);
-        setCurrentIndex(0);
+        // Keep current video and remove videos after currentIndex
+        setVideos(prev => {
+          const currentIdx = currentIndexRef.current;
+          // Keep videos up to and including currentIndex, remove the rest
+          return prev.slice(0, currentIdx + 1);
+        });
+        // Don't reset currentIndex - keep it so current video continues playing
         searchedQueriesRef.current.clear();
         currentQueryRef.current = query.trim();
       } else {
@@ -72,28 +79,104 @@ export function useVideoQueue(): UseVideoQueueReturn {
 
       const newVideos: YouTubeVideo[] = data.videos || [];
 
-      // If replacing, set new videos and start from first video
+      // If replacing, keep current video and append new videos after it
       if (replace) {
-        setVideos(newVideos);
-        setCurrentIndex(0);
+        setVideos(prev => {
+          // Filter out duplicates from new videos
+          const existingIds = new Set(prev.map(v => v.id));
+          const uniqueNewVideos = newVideos.filter(v => !existingIds.has(v.id));
+          
+          // Keep current videos (up to currentIndex) and append new videos
+          const updatedVideos = [...prev, ...uniqueNewVideos];
+          
+          // After videos are loaded, automatically scroll to the next video (first new video)
+          if (uniqueNewVideos.length > 0) {
+            setTimeout(() => {
+              setCurrentIndex(prevIndex => {
+                const nextIndex = prevIndex + 1;
+                currentIndexRef.current = nextIndex;
+                if (updatedVideos[nextIndex]) {
+                  currentVideoIdRef.current = updatedVideos[nextIndex].id;
+                }
+                
+                // Remove the old video after scrolling to the next one
+                setTimeout(() => {
+                  setVideos(currentVideos => {
+                    // Remove the video at the old index (prevIndex)
+                    return currentVideos.filter((_, idx) => idx !== prevIndex);
+                  });
+                  // Adjust currentIndex since we removed a video before it
+                  setCurrentIndex(currentIdx => {
+                    const adjustedIndex = currentIdx - 1;
+                    currentIndexRef.current = adjustedIndex;
+                    return adjustedIndex;
+                  });
+                }, 300); // Wait 0.3s so the next video starts playing before removing old one
+                
+                return nextIndex;
+              });
+            }, 500); // Delay to ensure videos are rendered and current video continues playing
+          }
+          
+          return updatedVideos;
+        });
         searchedQueriesRef.current.add(normalizedQuery);
       } else {
-        // Add new videos to the queue (stack on top)
+        // Add new videos to the queue (prepend to beginning)
         setVideos(prev => {
           // Filter out duplicates
           const existingIds = new Set(prev.map(v => v.id));
           const uniqueNewVideos = newVideos.filter(v => !existingIds.has(v.id));
+          
+          if (uniqueNewVideos.length === 0) {
+            return prev; // No new videos to add
+          }
+          
           const updatedVideos = [...uniqueNewVideos, ...prev];
           
-          // Adjust current index: if no videos existed before, start at 0
-          // Otherwise, adjust by the number of unique new videos added
-          setTimeout(() => {
-            if (prev.length === 0) {
-              setCurrentIndex(0);
-            } else if (uniqueNewVideos.length > 0) {
-              setCurrentIndex(prevIndex => prevIndex + uniqueNewVideos.length);
+          // Handle index adjustment
+          if (prev.length === 0) {
+            // No videos existed before, start at first new video
+            setCurrentIndex(0);
+            currentIndexRef.current = 0;
+            if (updatedVideos[0]) {
+              currentVideoIdRef.current = updatedVideos[0].id;
             }
-          }, 0);
+          } else if (autoScroll) {
+            // If auto-scroll is enabled, find the current video's new position
+            // Track the current video ID to maintain position
+            const currentVideoId = currentVideoIdRef.current || (prev[currentIndex]?.id ?? null);
+            
+            if (currentVideoId) {
+              // Find the new index of the current video after prepending
+              const newIndex = updatedVideos.findIndex(v => v.id === currentVideoId);
+              if (newIndex !== -1) {
+                // Set index to current video's new position (no visual jump)
+                setCurrentIndex(newIndex);
+                currentIndexRef.current = newIndex;
+                currentVideoIdRef.current = currentVideoId;
+              }
+            }
+            
+            // After videos are loaded, smoothly scroll to the first new video (index 0)
+            setTimeout(() => {
+              setCurrentIndex(0);
+              currentIndexRef.current = 0;
+              if (updatedVideos[0]) {
+                currentVideoIdRef.current = updatedVideos[0].id;
+              }
+            }, 500); // Delay to ensure videos are rendered and current video continues playing
+          } else {
+            // No auto-scroll: adjust index to keep current video playing
+            setCurrentIndex(prevIndex => {
+              const newIndex = prevIndex + uniqueNewVideos.length;
+              currentIndexRef.current = newIndex;
+              if (updatedVideos[newIndex]) {
+                currentVideoIdRef.current = updatedVideos[newIndex].id;
+              }
+              return newIndex;
+            });
+          }
           
           return updatedVideos;
         });
@@ -122,29 +205,105 @@ export function useVideoQueue(): UseVideoQueueReturn {
 
       const newVideos: YouTubeVideo[] = fallbackPayload.videos || [];
 
-      // If replacing, set new videos and start from first video
+      // If replacing, keep current video and append new videos after it
       if (replace) {
-        setVideos(newVideos);
-        setCurrentIndex(0);
+        setVideos(prev => {
+          // Filter out duplicates from new videos
+          const existingIds = new Set(prev.map(v => v.id));
+          const uniqueNewVideos = newVideos.filter(v => !existingIds.has(v.id));
+          
+          // Keep current videos (up to currentIndex) and append new videos
+          const updatedVideos = [...prev, ...uniqueNewVideos];
+          
+          // After videos are loaded, automatically scroll to the next video (first new video)
+          if (uniqueNewVideos.length > 0) {
+            setTimeout(() => {
+              setCurrentIndex(prevIndex => {
+                const nextIndex = prevIndex + 1;
+                currentIndexRef.current = nextIndex;
+                if (updatedVideos[nextIndex]) {
+                  currentVideoIdRef.current = updatedVideos[nextIndex].id;
+                }
+                
+                // Remove the old video after scrolling to the next one
+                setTimeout(() => {
+                  setVideos(currentVideos => {
+                    // Remove the video at the old index (prevIndex)
+                    return currentVideos.filter((_, idx) => idx !== prevIndex);
+                  });
+                  // Adjust currentIndex since we removed a video before it
+                  setCurrentIndex(currentIdx => {
+                    const adjustedIndex = currentIdx - 1;
+                    currentIndexRef.current = adjustedIndex;
+                    return adjustedIndex;
+                  });
+                }, 300); // Wait 0.3s so the next video starts playing before removing old one
+                
+                return nextIndex;
+              });
+            }, 500); // Delay to ensure videos are rendered and current video continues playing
+          }
+          
+          return updatedVideos;
+        });
         searchedQueriesRef.current.add(normalizedQuery);
         setError(null); // Clear error since we have fallback data
       } else {
-        // Add new videos to the queue (stack on top)
+        // Add new videos to the queue (prepend to beginning)
         setVideos(prev => {
           // Filter out duplicates
           const existingIds = new Set(prev.map(v => v.id));
           const uniqueNewVideos = newVideos.filter(v => !existingIds.has(v.id));
+          
+          if (uniqueNewVideos.length === 0) {
+            return prev; // No new videos to add
+          }
+          
           const updatedVideos = [...uniqueNewVideos, ...prev];
           
-          // Adjust current index: if no videos existed before, start at 0
-          // Otherwise, adjust by the number of unique new videos added
-          setTimeout(() => {
-            if (prev.length === 0) {
-              setCurrentIndex(0);
-            } else if (uniqueNewVideos.length > 0) {
-              setCurrentIndex(prevIndex => prevIndex + uniqueNewVideos.length);
+          // Handle index adjustment
+          if (prev.length === 0) {
+            // No videos existed before, start at first new video
+            setCurrentIndex(0);
+            currentIndexRef.current = 0;
+            if (updatedVideos[0]) {
+              currentVideoIdRef.current = updatedVideos[0].id;
             }
-          }, 0);
+          } else if (autoScroll) {
+            // If auto-scroll is enabled, find the current video's new position
+            // Track the current video ID to maintain position
+            const currentVideoId = currentVideoIdRef.current || (prev[currentIndex]?.id ?? null);
+            
+            if (currentVideoId) {
+              // Find the new index of the current video after prepending
+              const newIndex = updatedVideos.findIndex(v => v.id === currentVideoId);
+              if (newIndex !== -1) {
+                // Set index to current video's new position (no visual jump)
+                setCurrentIndex(newIndex);
+                currentIndexRef.current = newIndex;
+                currentVideoIdRef.current = currentVideoId;
+              }
+            }
+            
+            // After videos are loaded, smoothly scroll to the first new video (index 0)
+            setTimeout(() => {
+              setCurrentIndex(0);
+              currentIndexRef.current = 0;
+              if (updatedVideos[0]) {
+                currentVideoIdRef.current = updatedVideos[0].id;
+              }
+            }, 500); // Delay to ensure videos are rendered and current video continues playing
+          } else {
+            // No auto-scroll: adjust index to keep current video playing
+            setCurrentIndex(prevIndex => {
+              const newIndex = prevIndex + uniqueNewVideos.length;
+              currentIndexRef.current = newIndex;
+              if (updatedVideos[newIndex]) {
+                currentVideoIdRef.current = updatedVideos[newIndex].id;
+              }
+              return newIndex;
+            });
+          }
           
           return updatedVideos;
         });
@@ -159,6 +318,11 @@ export function useVideoQueue(): UseVideoQueueReturn {
     setCurrentIndex(prev => {
       if (prev < videos.length - 1) {
         const newIndex = prev + 1;
+        currentIndexRef.current = newIndex;
+        // Update current video ID
+        if (videos[newIndex]) {
+          currentVideoIdRef.current = videos[newIndex].id;
+        }
         // Remove videos below current position (already watched)
         setTimeout(() => {
           setVideos(currentVideos => currentVideos.slice(0, newIndex + 5));
@@ -167,17 +331,29 @@ export function useVideoQueue(): UseVideoQueueReturn {
       }
       return prev;
     });
-  }, [videos.length]);
+  }, [videos]);
 
   const goToPrevious = useCallback(() => {
-    setCurrentIndex(prev => (prev > 0 ? prev - 1 : prev));
-  }, []);
+    setCurrentIndex(prev => {
+      if (prev > 0) {
+        const newIndex = prev - 1;
+        currentIndexRef.current = newIndex;
+        if (videos[newIndex]) {
+          currentVideoIdRef.current = videos[newIndex].id;
+        }
+        return newIndex;
+      }
+      return prev;
+    });
+  }, [videos]);
 
   const clearQueue = useCallback(() => {
     setVideos([]);
     setCurrentIndex(0);
+    currentIndexRef.current = 0;
     searchedQueriesRef.current.clear();
     currentQueryRef.current = '';
+    currentVideoIdRef.current = null;
   }, []);
 
   return {

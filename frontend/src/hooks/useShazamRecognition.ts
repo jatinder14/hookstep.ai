@@ -45,6 +45,7 @@ export function useShazamRecognition({
   const lastTrackKeyRef = useRef<string | null>(null);
   const isCapturingRef = useRef(false);
   const isProcessingRef = useRef(false);
+  const lastApiCallTimeRef = useRef<number>(0); // Track last API call time to enforce 5-second interval
 
   const { identifySong, isLoading, error: shazamError } = useShazam();
   const {
@@ -68,10 +69,25 @@ export function useShazamRecognition({
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
 
-  // Process audio when captured - only if enabled
+  // Process audio when captured - only if enabled and enough time has passed
   useEffect(() => {
     if (audioBlob && !isProcessing && isEnabled) {
+      // Check timing - ensure 5 seconds since last API call (allow first call when lastApiCallTimeRef is 0)
+      const now = Date.now();
+      const timeSinceLastCall = lastApiCallTimeRef.current === 0 
+        ? intervalMs + 1 // Allow first call
+        : now - lastApiCallTimeRef.current;
+      
+      if (timeSinceLastCall < intervalMs) {
+        console.log(`⏳ Skipping API call - only ${timeSinceLastCall}ms since last call (need ${intervalMs}ms)`);
+        return;
+      }
+
+      // Update last call time before making API call
+      lastApiCallTimeRef.current = now;
       setIsProcessing(true);
+      
+      console.log('🎵 Calling Shazam API (5 second interval enforced)');
       identifySong(audioBlob)
         .then((response) => {
           if (response?.matches?.[0]?.track) {
@@ -81,20 +97,26 @@ export function useShazamRecognition({
               lastTrackKeyRef.current = track.key;
               setCurrentTrack(track);
               onSongIdentified?.(track);
+              console.log('✅ New song identified:', track.title);
+            } else {
+              console.log('🔄 Same song detected, skipping update');
             }
+          } else {
+            console.log('⚠️ No song match found in Shazam response');
           }
         })
         .catch((err) => {
-          console.error('Error identifying song:', err);
+          console.error('❌ Error identifying song:', err);
         })
         .finally(() => {
           setIsProcessing(false);
+          console.log('✅ Shazam API call completed');
         });
     } else if (audioBlob && !isEnabled) {
       // If disabled, just clear the blob without processing
-      console.log('Shazam recognition disabled, skipping API call');
+      console.log('⏸️ Shazam recognition disabled, skipping API call');
     }
-  }, [audioBlob, identifySong, isProcessing, isEnabled, onSongIdentified]);
+  }, [audioBlob, identifySong, isProcessing, isEnabled, onSongIdentified, intervalMs]);
 
   const startListening = useCallback(() => {
     // Clear any existing interval
@@ -103,22 +125,46 @@ export function useShazamRecognition({
       intervalRef.current = null;
     }
 
+    // Initialize last call time to 0 to allow first call immediately
+    lastApiCallTimeRef.current = 0;
+
     // Function to capture and identify - only if not already processing
     const captureAndIdentify = () => {
       // Check if we should skip (already capturing/processing or disabled)
       if (!isEnabled || isCapturingRef.current || isProcessingRef.current) {
+        console.log('⏭️ Skipping Shazam call - already processing or disabled');
         return;
       }
 
-      // Start capture
+      // Check timing before starting capture - but don't block if it's the first call
+      const now = Date.now();
+      const timeSinceLastCall = now - lastApiCallTimeRef.current;
+      
+      // Allow first call (if lastApiCallTimeRef is 0 or very old) or if enough time has passed
+      if (lastApiCallTimeRef.current > 0 && timeSinceLastCall < intervalMs) {
+        const waitTime = intervalMs - timeSinceLastCall;
+        console.log(`⏳ Waiting ${waitTime}ms before next capture (${timeSinceLastCall}ms since last API call)`);
+        setTimeout(() => {
+          // Double-check we're still good to proceed
+          if (!isCapturingRef.current && !isProcessingRef.current && isEnabled) {
+            console.log('🎵 Starting audio capture (after wait)');
+            startCapture();
+          }
+        }, waitTime);
+        return;
+      }
+
+      // Start capture - timing will be checked again in useEffect before API call
+      console.log('🎵 Starting audio capture');
       startCapture();
     };
 
     // Initial capture after a short delay
     setTimeout(captureAndIdentify, 1000);
 
-    // Set up interval for periodic recognition (every 5 seconds by default)
+    // Set up interval for periodic recognition (exactly every 5 seconds)
     intervalRef.current = setInterval(captureAndIdentify, intervalMs);
+    console.log(`⏰ Shazam recognition started - will call API every ${intervalMs}ms (${intervalMs / 1000}s)`);
   }, [startCapture, intervalMs, isEnabled]);
 
   const stopListening = useCallback(() => {

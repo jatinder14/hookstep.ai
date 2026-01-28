@@ -62,8 +62,9 @@ const Index = () => {
       
       setLatestQuery(trackKey);
       setIsMuted(false);
-      // Search YouTube with the identified song
-      addVideosFromQuery(searchQuery, true);
+      // Add new videos without replacing current ones, then auto-scroll to first new video
+      // This keeps the current video playing while loading new ones
+      addVideosFromQuery(searchQuery, false, true); // false = don't replace, true = auto-scroll
     }
   }, [addVideosFromQuery, latestQuery]);
 
