@@ -398,8 +398,6 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
         });
         
         iframeRef.current.contentWindow?.postMessage(message, 'https://www.youtube.com');
-        
-        console.log('Toggled video:', newPlayingState ? 'play' : 'pause', message);
       } catch (error) {
         console.warn('Failed to toggle play/pause via postMessage:', error);
       }

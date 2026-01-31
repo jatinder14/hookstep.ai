@@ -11,11 +11,9 @@ echo "🚀 Deploying all Supabase Edge Functions..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# List of functions to deploy
+# List of functions to deploy (recognition is direct to Node server; no proxy)
 FUNCTIONS=(
-  "shazam-detect"
   "youtube-search"
-  "identify-song"
 )
 
 # Deploy each function

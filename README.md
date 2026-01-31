@@ -1,127 +1,44 @@
 # Song to Bolly Beat
 
-A music recognition app that identifies songs and automatically finds related YouTube videos.
+A music recognition app that identifies songs and finds related YouTube videos.
 
-## 🏗️ Project Structure
+## Project structure
 
 ```
 song-to-bolly-beat/
-├── frontend/          # React + Vite frontend application
-│   ├── src/          # Source code
-│   ├── public/       # Static assets
-│   └── package.json  # Frontend dependencies
-│
-├── backend/          # Supabase Edge Functions
-│   └── supabase/     # Supabase configuration
-│       ├── functions/    # Edge Functions
-│       └── migrations/   # Database migrations
-│
-└── docs/             # Documentation files
-    ├── BACKEND_SETUP.md
-    ├── HOW_TO_GET_CREDENTIALS.md
-    └── TROUBLESHOOTING.md
+├── frontend/     # React + Vite
+├── backend/      # Node-shazam recognize server + Supabase Edge Functions
+└── .github/      # CI (deploy recognize to Cloud Run)
 ```
 
-## 🚀 Quick Start
+## Quick start
 
-### Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env  # Add your Supabase credentials
+cp .env.example .env   # Add Supabase URL/key and VITE_RECOGNIZE_API_URL
 npm run dev
 ```
-
-### Backend Setup
-
-```bash
-cd backend/supabase
-supabase login
-supabase link --project-ref your-project-ref
-supabase secrets set SHAZAM_API_KEY=your_key
-supabase secrets set YOUTUBE_API_KEY=your_key
-
-# Deploy all functions at once
-cd ..
-npm run deploy
-
-# OR deploy individually
-cd supabase
-supabase functions deploy shazam-detect
-supabase functions deploy youtube-search
-```
-
-See [BACKEND_SETUP.md](./BACKEND_SETUP.md) for detailed instructions.
-
-## 📚 Documentation
-
-- **[Frontend README](./frontend/README.md)** - Frontend setup and development
-- **[Backend README](./backend/README.md)** - Backend setup and deployment
-- **[Backend Setup Guide](./BACKEND_SETUP.md)** - Complete backend setup instructions
-- **[How to Get Credentials](./HOW_TO_GET_CREDENTIALS.md)** - Where to find all API keys
-- **[Troubleshooting](./TROUBLESHOOTING.md)** - Common issues and solutions
-
-## 🎯 Features
-
-- 🎵 **Music Recognition** - Shazam API integration
-- 🎤 **Speech Recognition** - Continuous audio listening
-- 📹 **YouTube Integration** - Automatic video search and playback
-- 🎨 **Modern UI** - Beautiful, responsive design with animations
-- 🔒 **Secure** - API keys stored on backend, never exposed
-
-## 🛠️ Tech Stack
-
-### Frontend
-- React 18 + TypeScript
-- Vite
-- Tailwind CSS
-- Framer Motion
-- shadcn/ui
 
 ### Backend
-- Supabase Edge Functions
-- Shazam API (via RapidAPI)
 
-## 📝 Environment Variables
+- **Song recognition:** Node-shazam server. Run `cd backend && npm run recognize` (local) or deploy to Cloud Run / Render. Set `VITE_RECOGNIZE_API_URL` in frontend `.env` to that URL.
+- **YouTube search:** Supabase Edge Function. From `backend`: `npm run deploy` (deploys youtube-search). Add `YOUTUBE_API_KEY` in Supabase Dashboard → Edge Functions → Secrets.
 
-### Frontend (.env in `frontend/` directory)
-```bash
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
-```
+See [backend/README.md](./backend/README.md) and [frontend/README.md](./frontend/README.md) for details.
 
-### Backend (Supabase Secrets)
-- `SHAZAM_API_KEY` - Your RapidAPI key
+## Environment
 
-See [HOW_TO_GET_CREDENTIALS.md](./HOW_TO_GET_CREDENTIALS.md) for detailed instructions.
+**Frontend** (`frontend/.env`):
 
-## 🔐 Security
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` – Supabase
+- `VITE_RECOGNIZE_API_URL` – recognize server URL (e.g. `http://localhost:3456` or your Cloud Run/Render URL)
 
-- ✅ API keys stored securely on Supabase backend
-- ✅ No API keys in frontend code
-- ✅ CORS protection
-- ✅ Request validation
+**Backend:** Supabase secret `YOUTUBE_API_KEY` (YouTube Data API v3).
 
-## 📖 Development
+## Tech stack
 
-### Frontend Development
-```bash
-cd frontend
-npm run dev
-```
-
-### Backend Development
-```bash
-cd backend/supabase
-supabase functions deploy shazam-detect
-supabase functions logs shazam-detect
-```
-
-## 🐛 Troubleshooting
-
-See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common issues and solutions.
-
-## 📄 License
-
-[Your License Here]
+- **Frontend:** React 18, TypeScript, Vite, Tailwind, Framer Motion, shadcn/ui, Supabase
+- **Backend:** Node-shazam (recognize), Supabase Edge Functions (youtube-search)

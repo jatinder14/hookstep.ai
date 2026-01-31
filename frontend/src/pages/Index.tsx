@@ -52,14 +52,6 @@ const Index = () => {
     // Only search if it's a different song (check by track key if available)
     const trackKey = track.key || searchQuery;
     if (searchQuery && trackKey !== latestQuery) {
-      console.log('🎵 Shazam identified:', {
-        title: track.title,
-        artist: track.subtitle,
-        key: track.key,
-        coverArt: track.images?.coverart,
-        url: track.url,
-      });
-      
       setLatestQuery(trackKey);
       setIsMuted(false);
       // Add new videos without replacing current ones, then auto-scroll to first new video
@@ -68,7 +60,7 @@ const Index = () => {
     }
   }, [addVideosFromQuery, latestQuery]);
 
-  // Shazam music recognition - fires API every 5 seconds (controlled by interval)
+  // Song recognition via Node-shazam (recognize API) every 5 seconds
   const {
     isListening: isShazamListening,
     isProcessing: isShazamProcessing,

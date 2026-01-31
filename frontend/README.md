@@ -28,14 +28,15 @@ npm install
 
 ### Environment Variables
 
-Create a `.env` file in the `frontend/` directory:
+Create a `.env` file in the `frontend/` directory (copy from `.env.example`):
 
 ```bash
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key_here
+VITE_RECOGNIZE_API_URL=http://localhost:3456   # Node-shazam server (required for song recognition)
 ```
 
-See `../HOW_TO_GET_CREDENTIALS.md` for detailed instructions.
+See root [README.md](../README.md) and [backend/README.md](../backend/README.md) for backend setup.
 
 ### Development
 
@@ -73,7 +74,7 @@ frontend/
 
 ## Features
 
-- 🎵 **Music Recognition** - Shazam API integration (via backend)
+- 🎵 **Music Recognition** - Node-shazam recognize server (no API key)
 - 🎤 **Speech Recognition** - Continuous listening
 - 📹 **YouTube Integration** - Video search and playback
 - 🎨 **Modern UI** - Beautiful, responsive design
@@ -81,7 +82,7 @@ frontend/
 
 ## Backend Integration
 
-The frontend communicates with the backend via Supabase Edge Functions:
-- `shazam-detect` - Music recognition API
+- **Song recognition:** Node-shazam server (`VITE_RECOGNIZE_API_URL`). Run `cd backend && npm run recognize`.
+- **YouTube search:** Supabase Edge Function `youtube-search`.
 
 See `../backend/README.md` for backend setup.
