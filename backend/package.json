@@ -10,7 +10,7 @@
     "list": "cd supabase && supabase functions list",
     "logs:youtube": "cd supabase && supabase functions logs youtube-search",
     "recognize": "tsx recognize/server.ts",
-    "start:recognize": "tsx recognize/server.ts"
+    "dev": "tsx recognize/server.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

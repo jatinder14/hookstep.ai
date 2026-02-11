@@ -4,8 +4,8 @@ import { useAudioCapture } from './useAudioCapture';
 
 interface UseShazamRecognitionOptions {
   autoStart?: boolean;
-  captureDuration?: number; // Duration to capture audio in ms (recognize needs ~3–5s)
-  intervalMs?: number; // How often to check for new songs (default: 5000ms)
+  captureDuration?: number; // Duration to capture audio in ms (2.5s is enough for Shazam)
+  intervalMs?: number; // How often to check for new songs (default: 3000ms)
   onSongIdentified?: (track: ShazamTrack) => void;
   enabled?: boolean; // Flag to enable/disable recognition
 }
@@ -23,7 +23,7 @@ interface UseShazamRecognitionReturn {
 /**
  * Listens to audio and identifies songs via the recognize API (Node-shazam) at intervals.
  *
- * 1. Captures microphone audio at specified intervals (default: 5 seconds)
+ * 1. Captures microphone audio at specified intervals (default: 2.5 seconds)
  * 2. Sends samples to the recognize API (Supabase proxy or local Node server)
  * 3. Calls onSongIdentified when a new track is detected
  *
@@ -31,8 +31,8 @@ interface UseShazamRecognitionReturn {
  */
 export function useShazamRecognition({
   autoStart = false,
-  captureDuration = 5000,
-  intervalMs = 5000,
+  captureDuration = 2500,
+  intervalMs = 3000,
   onSongIdentified,
   enabled = true, // Default enabled
 }: UseShazamRecognitionOptions = {}): UseShazamRecognitionReturn {
@@ -43,7 +43,7 @@ export function useShazamRecognition({
   const lastTrackKeyRef = useRef<string | null>(null);
   const isCapturingRef = useRef(false);
   const isProcessingRef = useRef(false);
-  const lastApiCallTimeRef = useRef<number>(0); // Track last API call time to enforce 5-second interval
+  const lastApiCallTimeRef = useRef<number>(0); // Track last API call time to enforce interval
 
   const { identifySong, isLoading, error: shazamError } = useShazam();
   const {
@@ -70,7 +70,7 @@ export function useShazamRecognition({
   // Process audio when captured - only if enabled and enough time has passed
   useEffect(() => {
     if (audioBlob && !isProcessing && isEnabled) {
-      // Check timing - ensure 5 seconds since last API call (allow first call when lastApiCallTimeRef is 0)
+      // Check timing - ensure interval since last API call (allow first call when lastApiCallTimeRef is 0)
       const now = Date.now();
       const timeSinceLastCall = lastApiCallTimeRef.current === 0 
         ? intervalMs + 1 // Allow first call

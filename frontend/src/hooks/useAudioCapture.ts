@@ -15,7 +15,7 @@ interface UseAudioCaptureReturn {
 }
 
 export function useAudioCapture({ 
-  duration = 3000, 
+  duration = 2500, 
   autoStart = false 
 }: UseAudioCaptureOptions = {}): UseAudioCaptureReturn {
   const [isListening, setIsListening] = useState(false);

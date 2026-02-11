@@ -71,8 +71,8 @@ const Index = () => {
     setEnabled: setShazamEnabled,
   } = useShazamRecognition({
     autoStart: false,
-    captureDuration: 5000, // 5 seconds audio capture
-    intervalMs: 5000, // Fire API every 5 seconds (not continuously)
+    captureDuration: 2500, // 2.5 seconds audio capture (faster Shazam recognition)
+    intervalMs: 4000, // Fire API every 4 seconds
     enabled: true, // Interval flag - set to false to disable
     onSongIdentified: handleShazamSongIdentified,
   });

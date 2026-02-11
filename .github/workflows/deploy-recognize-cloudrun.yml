@@ -1,5 +1,9 @@
 # Deploy the recognize server (node-shazam) to Google Cloud Run on push to main.
-# Requires GitHub secrets: GCP_SA_KEY, GCP_PROJECT_ID (see backend/README.md).
+#
+# Auth: use EITHER (A) or (B):
+#   (A) JSON key: secrets GCP_SA_KEY + GCP_PROJECT_ID (see backend/GCP_SA_KEY_SETUP.md)
+#   (B) Workload Identity (no keys): secrets WIF_PROVIDER + WIF_SERVICE_ACCOUNT + GCP_PROJECT_ID (see backend/WORKLOAD_IDENTITY_SETUP.md)
+# If your org blocks service account keys, use (B).
 
 name: Deploy recognize to Cloud Run
 
@@ -21,7 +25,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
+      - name: Check GCP auth config
+        id: auth
+        run: |
+          if [ -n "${{ secrets.WIF_PROVIDER }}" ] && [ -n "${{ secrets.WIF_SERVICE_ACCOUNT }}" ]; then
+            echo "method=wif" >> $GITHUB_OUTPUT
+            echo "Using Workload Identity Federation (no key)."
+          elif [ -n "${{ secrets.GCP_SA_KEY }}" ] && [ -n "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "method=key" >> $GITHUB_OUTPUT
+            echo "Using service account key."
+          else
+            echo "::error::Set either (1) GCP_SA_KEY + GCP_PROJECT_ID OR (2) WIF_PROVIDER + WIF_SERVICE_ACCOUNT + GCP_PROJECT_ID. See backend/GCP_SA_KEY_SETUP.md or backend/WORKLOAD_IDENTITY_SETUP.md"
+            exit 1
+          fi
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "::error::Secret GCP_PROJECT_ID is required."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        if: steps.auth.outputs.method == 'wif'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Authenticate to Google Cloud (service account key)
+        if: steps.auth.outputs.method == 'key'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
