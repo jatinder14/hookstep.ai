@@ -1,9 +1,9 @@
-# Deploy the recognize server (node-shazam) to Google Cloud Run on push to main.
+# Deploy recognize API (backend/ — Node + ffmpeg + node-shazam) → Cloud Run service "recognize".
 #
-# Auth: use EITHER (A) or (B):
-#   (A) JSON key: secrets GCP_SA_KEY + GCP_PROJECT_ID (see backend/GCP_SA_KEY_SETUP.md)
-#   (B) Workload Identity (no keys): secrets WIF_PROVIDER + WIF_SERVICE_ACCOUNT + GCP_PROJECT_ID (see backend/WORKLOAD_IDENTITY_SETUP.md)
-# If your org blocks service account keys, use (B).
+# Secrets: GCP_SA_JSON — same service-account JSON as Hookstep Cloud Run deploy (Cloud Run Admin,
+# Artifact Registry write, Service Account User on the Cloud Run runtime SA if needed).
+#
+# Project/region: jr-consulting-co / us-central1 (edit env block to change).
 
 name: Deploy recognize to Cloud Run
 
@@ -11,65 +11,96 @@ on:
   push:
     branches: [main]
     paths:
-      - 'backend/**'
+      - "backend/**"
+      - ".github/workflows/deploy-recognize-cloudrun.yml"
   workflow_dispatch:
+
+concurrency:
+  group: deploy-recognize-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: jr-consulting-co
+  REGION: us-central1
+  SERVICE: recognize
+  AR_REPOSITORY: cloud-run-source-deploy
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Check GCP auth config
-        id: auth
+      - name: Verify backend
         run: |
-          if [ -n "${{ secrets.WIF_PROVIDER }}" ] && [ -n "${{ secrets.WIF_SERVICE_ACCOUNT }}" ]; then
-            echo "method=wif" >> $GITHUB_OUTPUT
-            echo "Using Workload Identity Federation (no key)."
-          elif [ -n "${{ secrets.GCP_SA_KEY }}" ] && [ -n "${{ secrets.GCP_PROJECT_ID }}" ]; then
-            echo "method=key" >> $GITHUB_OUTPUT
-            echo "Using service account key."
-          else
-            echo "::error::Set either (1) GCP_SA_KEY + GCP_PROJECT_ID OR (2) WIF_PROVIDER + WIF_SERVICE_ACCOUNT + GCP_PROJECT_ID. See backend/GCP_SA_KEY_SETUP.md or backend/WORKLOAD_IDENTITY_SETUP.md"
-            exit 1
-          fi
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
-            echo "::error::Secret GCP_PROJECT_ID is required."
-            exit 1
-          fi
+          set -euo pipefail
+          test -f backend/Dockerfile
+          test -f backend/package-lock.json
 
-      - name: Authenticate to Google Cloud (Workload Identity)
-        if: steps.auth.outputs.method == 'wif'
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Authenticate to Google Cloud (service account key)
-        if: steps.auth.outputs.method == 'key'
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_SA_JSON }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
 
-      - name: Deploy to Cloud Run
+      - name: Enable required APIs (idempotent)
         run: |
-          REGION="${{ vars.GCP_REGION }}"
-          [ -z "$REGION" ] && REGION=us-central1
-          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
-          gcloud run deploy recognize \
-            --source ./backend \
-            --region "$REGION" \
+          gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+            --project="${PROJECT_ID}" --quiet
+
+      - name: Ensure Artifact Registry repository
+        run: |
+          if gcloud artifacts repositories describe "${AR_REPOSITORY}" \
+            --location="${REGION}" --project="${PROJECT_ID}" --quiet 2>/dev/null; then
+            echo "Repository ${AR_REPOSITORY} already exists."
+          else
+            gcloud artifacts repositories create "${AR_REPOSITORY}" \
+              --repository-format=docker \
+              --location="${REGION}" \
+              --project="${PROJECT_ID}" \
+              --description="Cloud Run container images" --quiet
+          fi
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        working-directory: backend
+        run: |
+          IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/${SERVICE}"
+          docker build -t "${IMAGE_BASE}:${GITHUB_SHA}" -t "${IMAGE_BASE}:latest" .
+          docker push "${IMAGE_BASE}:${GITHUB_SHA}"
+          docker push "${IMAGE_BASE}:latest"
+
+      - name: Deploy Cloud Run
+        run: |
+          set -euo pipefail
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
+          gcloud run deploy "${SERVICE}" \
+            --image="${IMAGE}" \
+            --region="${REGION}" \
+            --platform=managed \
+            --project="${PROJECT_ID}" \
+            --port=8080 \
+            --memory=1Gi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --timeout=120 \
             --allow-unauthenticated \
             --no-invoker-iam-check \
-            --platform managed \
+            --clear-env-vars \
             --quiet
-        env:
-          CLOUDSDK_CORE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Show service URL
+        run: |
+          echo "POST $(gcloud run services describe "${SERVICE}" --region="${REGION}" --project="${PROJECT_ID}" --format='value(status.url)')/api/recognize"

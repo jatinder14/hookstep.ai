@@ -589,7 +589,7 @@ const NeonReelCard = ({ video, isActive, isMuted = false, onToggleMute, autoPlay
                   if (!target.closest('button') && !target.closest('[role="button"]')) {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleVideoClick(e as any);
+                    handleVideoClick(e as React.TouchEvent<HTMLVideoElement>);
                   }
                 }
                 touchStartRef.current = null;
