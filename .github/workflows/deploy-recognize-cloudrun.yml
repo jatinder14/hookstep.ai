@@ -75,18 +75,29 @@ jobs:
             --project="${PROJECT_ID}" --quiet \
             || echo "::warning::Skipping API enable (no permission or already enabled). Continuing deploy."
 
+      # If `describe` fails with PERMISSION_DENIED (narrow SA), do not fall through to `create`
+      # (create also fails). Assume the repo already exists (same as main Hookstep).
       - name: Ensure Artifact Registry repository
         run: |
-          if gcloud artifacts repositories describe "${AR_REPOSITORY}" \
-            --location="${REGION}" --project="${PROJECT_ID}" --quiet 2>/dev/null; then
+          set -euo pipefail
+          EC=0
+          OUT=$(gcloud artifacts repositories describe "${AR_REPOSITORY}" \
+            --location="${REGION}" --project="${PROJECT_ID}" --quiet 2>&1) || EC=$?
+          if [[ "$EC" -eq 0 ]]; then
             echo "Repository ${AR_REPOSITORY} already exists."
-          else
+            exit 0
+          fi
+          if echo "$OUT" | grep -qiE 'NOT_FOUND|does not exist|404'; then
+            echo "Repository missing; creating ${AR_REPOSITORY}..."
             gcloud artifacts repositories create "${AR_REPOSITORY}" \
               --repository-format=docker \
               --location="${REGION}" \
               --project="${PROJECT_ID}" \
               --description="Cloud Run container images" --quiet
+            exit 0
           fi
+          echo "::warning::Could not verify Artifact Registry repo (describe failed). Assuming ${AR_REPOSITORY} already exists."
+          echo "$OUT"
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
