@@ -1,9 +1,8 @@
 # Deploy recognize API (backend/ — Node + ffmpeg + node-shazam) → Cloud Run service "recognize".
 #
-# Secrets (this repo only — GitHub does not share secrets across repos):
-#   GCP_SA_JSON — required. Full JSON key for a SA that can push to Artifact Registry and deploy Cloud Run
-#   in project jr-consulting-co (same JSON you use for Hookstep’s Cloud Run workflow, if that SA is allowed here).
-# If you previously used GCP_SA_KEY here, paste the same JSON into GCP_SA_JSON (one secret only).
+# Secrets: GCP_SA_JSON — use the same **Cloud Run / CI deploy** service account JSON as the main Hookstep app
+# (NOT a narrow GCS-only key like hookstep-local-gcs). Needs Artifact Registry + Cloud Run + (optional) Service Usage.
+# Prefer an **organization** secret on `hookstep` scoped to this repo.
 #
 # Project/region: jr-consulting-co / us-central1 (edit env block to change).
 
@@ -51,10 +50,10 @@ jobs:
           if [[ -z "${GCP_SA_JSON:-}" ]]; then
             echo "::error::Repository secret **GCP_SA_JSON** is not set (or is empty)."
             echo "The failed step was **Authenticate to Google Cloud** — this workflow needs a service account JSON key."
-            echo "Fix: GitHub → **jatinder14/hookstep.ai** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**"
+            echo "Fix: GitHub → **hookstep/hookstep.ai** → **Settings** → **Secrets and variables** → **Actions**"
             echo "  Name: GCP_SA_JSON"
             echo "  Value: paste the **entire** JSON key (same key you use for Hookstep Cloud Run deploy), if that SA can deploy to **jr-consulting-co**."
-            echo "Each repo has its own secrets; **hookstep.ai** does not inherit from other repositories."
+            echo "Use an org secret on **hookstep** or a repo secret on **hookstep/hookstep.ai**."
             exit 1
           fi
 
@@ -68,10 +67,13 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Enable required APIs (idempotent)
+      # Many deploy SAs cannot call serviceusage.services.enable; APIs are usually on already for Hookstep.
+      - name: Enable required APIs (best effort)
+        continue-on-error: true
         run: |
           gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
-            --project="${PROJECT_ID}" --quiet
+            --project="${PROJECT_ID}" --quiet \
+            || echo "::warning::Skipping API enable (no permission or already enabled). Continuing deploy."
 
       - name: Ensure Artifact Registry repository
         run: |
